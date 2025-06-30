@@ -259,30 +259,102 @@ ORDER BY
 |2011|12   |669395     |222           |222           |
 |2012|1    |495363     |252           |252           |
 |2012|2    |506992     |260           |260           |
-|2012|3    |373478     |212           |212           |
-|2012|4    |400324     |219           |219           |
-|2012|5    |358866     |207           |207           |
-|2012|6    |555142     |318           |318           |
-|2012|7    |444533     |246           |246           |
-|2012|8    |523887     |294           |294           |
-|2012|9    |486149     |269           |269           |
-|2012|10   |535125     |313           |313           |
-|2012|11   |537918     |324           |324           |
-|2012|12   |624454     |354           |483           |
-|2013|1    |857758     |627           |1677          |
-|2013|2    |771218     |1373          |3454          |
-|2013|3    |1049732    |1631          |4087          |
-|2013|4    |1045860    |1564          |3979          |
-|2013|5    |1284456    |1719          |4400          |
-|2013|6    |1642948    |1948          |5025          |
-|2013|7    |1371595    |1796          |4673          |
-|2013|8    |1545910    |1898          |4848          |
-|2013|9    |1447324    |1832          |4616          |
-|2013|10   |1673261    |2073          |5304          |
-|2013|11   |1780688    |2036          |5224          |
-|2013|12   |1874128    |2133          |5520          |
-|2014|1    |45642      |834           |1970          |
 
-  
+- **Analyze the yearly performance of products by comparing their sales 
+to both the average sales performance of the product and the previous year's sales**
+```sql
+WITH yearly_product_sales AS (
+  SELECT 
+    EXTRACT(
+      year 
+      FROM 
+        f.order_date
+    ) AS order_year, 
+    p.product_name, 
+    SUM(f.sales_amount) AS Current_sales 
+  FROM 
+    gold_fact_sales AS f 
+    LEFT JOIN gold_dim_products AS p ON f.product_key = p.product_key 
+  GROUP BY 
+    EXTRACT(
+      year 
+      FROM 
+        f.order_date
+    ), 
+    p.product_name 
+  ORDER BY 
+    order_year
+) 
+SELECT 
+  order_year, 
+  product_name, 
+  current_sales, 
+  ROUND(
+    AVG(current_sales) OVER(PARTITION BY product_name), 
+    2
+  ) AS avg_sales, 
+  ROUND(
+    current_sales - AVG(current_sales) OVER(PARTITION BY product_name), 
+    2
+  ) AS avg_diff, 
+  CASE WHEN (
+    current_sales - AVG(current_sales) OVER(PARTITION BY product_name)
+  )> 0 THEN 'Above average' WHEN (
+    current_sales - AVG(current_sales) OVER(PARTITION BY product_name)
+  )< 0 THEN 'Below average' ELSE 'Equal' END AS diff_avg, 
+  LAG(current_sales, 1) OVER(
+    PARTITION BY product_name 
+    ORDER BY 
+      order_year
+  ) AS py_sales, 
+  current_sales - LAG(current_sales, 1) OVER(
+    PARTITION BY product_name 
+    ORDER BY 
+      order_year
+  ) AS diff_py, 
+  CASE WHEN current_sales - LAG(current_sales, 1) OVER(
+    PARTITION BY product_name 
+    ORDER BY 
+      order_year
+  )> 0 THEN 'Increased' WHEN current_sales - LAG(current_sales, 1) OVER(
+    PARTITION BY product_name 
+    ORDER BY 
+      order_year
+  )< 0 THEN 'Decreased' ELSE 'No Change' END AS py_diff 
+FROM 
+  yearly_product_sales 
+ORDER BY 
+  product_name, 
+  order_year
+```
 
-
+**Output**
+|order_year|product_name                   |current_sales|avg_sales|avg_diff  |diff_avg     |py_sales|diff_py|py_diff  |
+|----------|-------------------------------|-------------|---------|----------|-------------|--------|-------|---------|
+|2012      |All-Purpose Bike Stand         |159          |13197.00 |-13038.00 |Below average|NULL    |NULL   |No Change|
+|2013      |All-Purpose Bike Stand         |37683        |13197.00 |24486.00  |Above average|159     |37524  |Increased|
+|2014      |All-Purpose Bike Stand         |1749         |13197.00 |-11448.00 |Below average|37683   |-35934 |Decreased|
+|2012      |AWC Logo Cap                   |72           |6570.00  |-6498.00  |Below average|NULL    |NULL   |No Change|
+|2013      |AWC Logo Cap                   |18891        |6570.00  |12321.00  |Above average|72      |18819  |Increased|
+|2014      |AWC Logo Cap                   |747          |6570.00  |-5823.00  |Below average|18891   |-18144 |Decreased|
+|2013      |Bike Wash - Dissolver          |6960         |3636.00  |3324.00   |Above average|NULL    |NULL   |No Change|
+|2014      |Bike Wash - Dissolver          |312          |3636.00  |-3324.00  |Below average|6960    |-6648  |Decreased|
+|2013      |Classic Vest- L                |11968        |6240.00  |5728.00   |Above average|NULL    |NULL   |No Change|
+|2014      |Classic Vest- L                |512          |6240.00  |-5728.00  |Below average|11968   |-11456 |Decreased|
+|2013      |Classic Vest- M                |11840        |6368.00  |5472.00   |Above average|NULL    |NULL   |No Change|
+|2014      |Classic Vest- M                |896          |6368.00  |-5472.00  |Below average|11840   |-10944 |Decreased|
+|2012      |Classic Vest- S                |64           |3648.00  |-3584.00  |Below average|NULL    |NULL   |No Change|
+|2013      |Classic Vest- S                |10368        |3648.00  |6720.00   |Above average|64      |10304  |Increased|
+|2014      |Classic Vest- S                |512          |3648.00  |-3136.00  |Below average|10368   |-9856  |Decreased|
+|2012      |Fender Set - Mountain          |110          |15554.00 |-15444.00 |Below average|NULL    |NULL   |No Change|
+|2013      |Fender Set - Mountain          |44484        |15554.00 |28930.00  |Above average|110     |44374  |Increased|
+|2014      |Fender Set - Mountain          |2068         |15554.00 |-13486.00 |Below average|44484   |-42416 |Decreased|
+|2012      |Half-Finger Gloves- L          |24           |3544.00  |-3520.00  |Below average|NULL    |NULL   |No Change|
+|2013      |Half-Finger Gloves- L          |10248        |3544.00  |6704.00   |Above average|24      |10224  |Increased|
+|2014      |Half-Finger Gloves- L          |360          |3544.00  |-3184.00  |Below average|10248   |-9888  |Decreased|
+|2012      |Half-Finger Gloves- M          |24           |3992.00  |-3968.00  |Below average|NULL    |NULL   |No Change|
+|2013      |Half-Finger Gloves- M          |11376        |3992.00  |7384.00   |Above average|24      |11352  |Increased|
+|2014      |Half-Finger Gloves- M          |576          |3992.00  |-3416.00  |Below average|11376   |-10800 |Decreased|
+|2012      |Half-Finger Gloves- S          |24           |2928.00  |-2904.00  |Below average|NULL    |NULL   |No Change|
+|2013      |Half-Finger Gloves- S          |11064        |2928.00  |8136.00   |Above average|24      |11040  |Increased|
+-------------
