@@ -1,4 +1,4 @@
-# Case-Study-Customer-Sales-Analysis-on-PostgreSQL-with-Advanced-SQL- &-Python
+# Case-Study-Customers-&-Sales-Analysis-on-PostgreSQL-with-Advanced-SQL- &-Python
 🧩 Objective
 The goal of this case study is to analyze sales, product, and customer data to extract valuable business insights. This involves loading raw data into a PostgreSQL database, designing relational schemas, and using advanced SQL techniques (CTEs, joins, window functions, subqueries) to answer real-world business questions.  
 
