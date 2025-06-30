@@ -358,3 +358,138 @@ ORDER BY
 |2012      |Half-Finger Gloves- S          |24           |2928.00  |-2904.00  |Below average|NULL    |NULL   |No Change|
 |2013      |Half-Finger Gloves- S          |11064        |2928.00  |8136.00   |Above average|24      |11040  |Increased|
 -------------
+- **Which category contributes the most to overall  sales**
+```sql
+WITH cte AS (
+  SELECT 
+    p.category, 
+    SUM(sales_amount) AS total_sales 
+  FROM 
+    gold_fact_sales AS f 
+    LEFT JOIN gold_dim_products AS p ON f.product_key = p.product_key 
+  GROUP BY 
+    p.category
+) 
+SELECT 
+  category, 
+  total_sales, 
+  CONCAT(
+    ROUND(
+      (
+        total_sales / SUM(total_sales) OVER()
+      )* 100, 
+      2
+    ), 
+    '%'
+  ) AS sales_perc 
+FROM 
+  cte 
+ORDER BY 
+  total_sales DESC;
+```
+**Output**
+|category   |total_sales|sales_perc|
+|-----------|-----------|----------|
+|Bikes      |28316272   |96.46%    |
+|Accessories|700262     |2.39%     |
+|Clothing   |339716     |1.16%     |
+
+- **Segment product into cost ranges and count how many product fall into each segment**
+```sql
+WITH product_segment AS (
+SELECT 
+product_key,
+product_name,
+CASE WHEN cost<100 THEN 'Below 100'
+	 WHEN cost BETWEEN 100 AND 500 THEN '100-500'
+	 WHEN cost BETWEEN 500 AND 1000 THEN '500-1000'
+	 ELSE 'Above 100' END AS cost_range
+FROM gold_dim_products)
+
+SELECT cost_range ,
+COUNT(product_key) AS total_products
+FROM product_segment
+GROUP BY cost_range
+ORDER BY total_products DESC;
+```
+**Output**
+|cost_range |total_products|
+|-----------|--------------|
+|Below 100  |110           |
+|100-500    |101           |
+|500-1000   |45            |
+|Above 100  |39            |
+
+- **Group customers into three segment based on their spending behavior** 
+ - VIP:atleast 12 month of history but spending  more than 5000 dollars
+ - Regular:atleast 12 month of history but spending  5000 or less
+ - New:lifespan less than 12 month
+ - find the total number of customer each groups
+```sql
+WITH customer_spending AS(
+  SELECT 
+    c.customer_key, 
+    SUM(f.sales_amount) AS total_sales, 
+    MIN(f.order_date) AS first_order_date, 
+    MAX(f.order_date) AS last_order_date, 
+    DATE_PART(
+      'year', 
+      AGE(
+        MAX(f.order_date), 
+        MIN(f.order_date)
+      )
+    )* 12 + DATE_PART(
+      'month', 
+      AGE(
+        MAX(f.order_date), 
+        MIN(f.order_date)
+      )
+    ) AS life_span 
+  FROM 
+    gold_fact_sales AS f 
+    LEFT JOIN gold_dim_customers AS c ON f.customer_key = c.customer_key 
+  WHERE 
+    f.order_date IS NOT NULL 
+  GROUP BY 
+    c.customer_key
+) 
+SELECT 
+  customer_segment, 
+  COUNT(customer_key) AS total_customer 
+FROM 
+  (
+    SELECT 
+      customer_key, 
+      total_sales, 
+      CASE WHEN life_span >= 12 
+      AND total_sales > 5000 THEN 'VIP' WHEN life_span >= 12 
+      AND total_sales <= 5000 THEN 'Regular' ELSE 'New' END AS customer_segment 
+    FROM 
+      customer_spending
+  ) AS t 
+GROUP BY 
+  customer_segment 
+ORDER BY 
+  total_customer DESC;
+```
+**Output**
+|customer_segment|total_customer|
+|----------------|--------------|
+|New             |14826         |
+|Regular         |2039          |
+|VIP             |1617          |
+
+
+## 🙏 Acknowledgements & Project Inspiration
+This project is inspired by the SQL Data Analyst Portfolio Project [Data with bara](https://www.youtube.com/@DataWithBaraa) on YouTube. The original project was implemented using SQL Server with direct database setup.
+
+## I have reimagined and extended the project with my own approach:
+
+- Implemented the database using PostgreSQL instead of SQL Server
+
+- Performed ETL in Python, importing .csv files and creating tables programmatically
+
+- Connected Python to PostgreSQL using psycopg2 and executed queries via scripts
+
+- Added advanced SQL components such as window functions, CTEs, subqueries, joins, and more
+
